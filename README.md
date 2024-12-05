@@ -1,6 +1,6 @@
 # Clothes Similarity Search
 
-This project implements a clothing similarity search system that can be integrated with an e-commerce frontend. The system uses deep learning to find similar clothing items based on image features.
+This project implements a clothing similarity search system. The system uses deep learning to find similar clothing items based on image features.
 
 ## Project Structure
 - `app.py`: Main Flask application that serves the API endpoints
