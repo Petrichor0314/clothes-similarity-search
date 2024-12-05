@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fashion Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+</head>
+<body class="bg-gray-100" x-data="{ 
+    activeTab: 'image',
+    gender: 'all',
+    category: 'all',
+    categories: [],
+    loading: false,
+    results: [],
+    previewImage: null,
+    updateCategories() {
+        fetch(`/categories?gender=${this.gender}`)
+            .then(response => response.json())
+            .then(data => {
+                this.categories = data;
+                this.category = 'all';
+            });
+    },
+    searchByImage() {
+        console.log('Starting image search...');
+        console.log('Gender:', this.gender);
+        console.log('Category:', this.category);
+        
+        const fileInput = document.getElementById('image-upload');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            console.error('No file selected');
+            alert('Please select an image first');
+            return;
+        }
+        
+        console.log('File selected:', file.name);
+        this.loading = true;
+        this.results = [];
+
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('gender', this.gender);
+        formData.append('category', this.category);
+
+        console.log('Sending request to server...');
+        
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        fetch('/search/image', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        })
+        .then(response => {
+            clearTimeout(timeoutId);
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Received data:', data);
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            // Log the first result's image URL
+            if (data.length > 0) {
+                console.log('First result image URL:', data[0].image_url);
+            }
+            this.results = data;
+            if (data.length === 0) {
+                console.log('No results found');
+                alert('No similar items found. Try a different image or adjust your filters.');
+            } else {
+                console.log(`Found ${data.length} results`);
+            }
+        })
+        .catch(error => {
+            clearTimeout(timeoutId);
+            console.error('Error details:', error);
+            if (error.name === 'AbortError') {
+                alert('Request timed out. The server is taking too long to respond.');
+            } else {
+                alert('An error occurred while searching: ' + error.message);
+            }
+        })
+        .finally(() => {
+            console.log('Search completed');
+            this.loading = false;
+        });
+    },
+    searchByKeyword() {
+        const keyword = document.getElementById('keyword-input').value;
+        
+        if (!keyword) {
+            alert('Please enter a search term');
+            return;
+        }
+
+        this.loading = true;
+        this.results = [];
+
+        fetch('/search/keyword', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                keyword,
+                gender: this.gender,
+                category: this.category
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            this.results = data;
+            this.loading = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            this.loading = false;
+            alert('An error occurred while searching. Please try again.');
+        });
+    }
+}">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">Fashion Similarity Search</h1>
+        
+        <!-- Search Tabs -->
+        <div class="flex justify-center mb-6">
+            <button 
+                @click="activeTab = 'image'" 
+                :class="{'bg-blue-500 text-white': activeTab === 'image', 'bg-gray-200': activeTab !== 'image'}"
+                class="px-4 py-2 rounded-l-lg">
+                Image Search
+            </button>
+            <button 
+                @click="activeTab = 'keyword'" 
+                :class="{'bg-blue-500 text-white': activeTab === 'keyword', 'bg-gray-200': activeTab !== 'keyword'}"
+                class="px-4 py-2 rounded-r-lg">
+                Keyword Search
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-4">
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Gender Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                    <select 
+                        x-model="gender" 
+                        @change="updateCategories()"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All</option>
+                        <option value="men">Men</option>
+                        <option value="women">Women</option>
+                    </select>
+                </div>
+                
+                <!-- Category Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select 
+                        x-model="category"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All Categories</option>
+                        <template x-for="cat in categories">
+                            <option :value="cat.toLowerCase()" x-text="cat"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Forms -->
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <!-- Image Search -->
+            <div x-show="activeTab === 'image'" class="space-y-4">
+                <div class="flex items-center justify-center w-full">
+                    <label class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                        <div x-show="!previewImage" class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                            </svg>
+                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-gray-500">PNG, JPG or JPEG</p>
+                        </div>
+                        <div x-show="previewImage" class="w-full h-full">
+                            <img :src="previewImage" class="w-full h-full object-contain" />
+                        </div>
+                        <input 
+                            id="image-upload" 
+                            type="file" 
+                            class="hidden" 
+                            accept="image/*"
+                            @change="const file = $event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { previewImage = e.target.result; }; reader.readAsDataURL(file); }"
+                        />
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button 
+                        @click="searchByImage()" 
+                        :disabled="loading || !previewImage"
+                        class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300">
+                        <span x-show="!loading">Search Similar Items</span>
+                        <span x-show="loading">Searching...</span>
+                    </button>
+                    <button 
+                        x-show="previewImage"
+                        @click="previewImage = null; document.getElementById('image-upload').value = '';"
+                        class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Keyword Search -->
+            <div x-show="activeTab === 'keyword'" class="space-y-4">
+                <input 
+                    type="text" 
+                    id="keyword-input"
+                    placeholder="Enter search terms (e.g., blue dress, cotton shirt)"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button 
+                    @click="searchByKeyword()" 
+                    :disabled="loading"
+                    class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300">
+                    <span x-show="!loading">Search</span>
+                    <span x-show="loading">Searching...</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div 
+            x-show="results.length > 0"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <template x-for="item in results">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <a :href="item.link" target="_blank" class="block">
+                        <div class="aspect-[3/4] relative">
+                            <img 
+                                :src="item.image_url" 
+                                :alt="item.category"
+                                class="absolute w-full h-full object-contain"
+                                @error="$el.src = 'https://via.placeholder.com/300x400?text=Image+Not+Available'"
+                            >
+                        </div>
+                        <div class="p-4">
+                            <p class="text-gray-600 mb-2" x-text="item.category"></p>
+                            <p class="text-sm text-gray-500">Score: <span x-text="(1 - item.score).toFixed(3)"></span></p>
+                        </div>
+                    </a>
+                </div>
+            </template>
+        </div>
+        
+        <!-- No Results Message -->
+        <div 
+            x-show="results.length === 0 && !loading"
+            class="text-center text-gray-500 mt-8">
+            No results found. Try adjusting your search criteria.
+        </div>
+    </div>
+
+    <script>
+        // Initialize categories on page load
+        document.addEventListener('alpine:init', () => {
+            const app = Alpine.raw(document.querySelector('body').__x.$data);
+            app.updateCategories();
+        });
+    </script>
+</body>
+</html>
